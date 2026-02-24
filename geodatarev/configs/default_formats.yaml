@@ -1,0 +1,155 @@
+# Default format definitions for geodatarev.
+#
+# Each entry describes a legacy binary format's magic number, header layout,
+# and data type so the framework can identify and parse files automatically.
+#
+# Bit widths for data payloads:
+#   8-bit  : uint8 / int8
+#   16-bit : uint16 / int16
+#   32-bit : uint32 / int32 / float32 / vax_f / ibm_float32
+#   64-bit : uint64 / int64 / float64 / vax_d / vax_g / ibm_float64
+
+formats:
+  - name: "Surfer 6 Binary Grid"
+    extensions: [".grd"]
+    magic_bytes: "44 53 42 42"    # DSBB
+    magic_offset: 0
+    endian: little
+    header_size: 56
+    data_dtype: float32
+    description: "Golden Software Surfer 6 binary grid with 32-bit float payload"
+    fields:
+      - name: magic
+        offset: 0
+        size: 4
+        dtype: ascii
+        description: "File signature DSBB"
+      - name: nx
+        offset: 4
+        size: 2
+        dtype: uint16
+        description: "Number of columns"
+      - name: ny
+        offset: 6
+        size: 2
+        dtype: uint16
+        description: "Number of rows"
+      - name: xlo
+        offset: 8
+        size: 8
+        dtype: float64
+        description: "Minimum X coordinate"
+      - name: xhi
+        offset: 16
+        size: 8
+        dtype: float64
+        description: "Maximum X coordinate"
+      - name: ylo
+        offset: 24
+        size: 8
+        dtype: float64
+        description: "Minimum Y coordinate"
+      - name: yhi
+        offset: 32
+        size: 8
+        dtype: float64
+        description: "Maximum Y coordinate"
+      - name: zlo
+        offset: 40
+        size: 8
+        dtype: float64
+        description: "Minimum Z value"
+      - name: zhi
+        offset: 48
+        size: 8
+        dtype: float64
+        description: "Maximum Z value"
+
+  - name: "Surfer 7 Binary Grid"
+    extensions: [".grd"]
+    magic_bytes: "44 53 52 42"    # DSRB
+    magic_offset: 0
+    endian: little
+    header_size: 0    # variable (tag-based)
+    data_dtype: float64
+    description: "Golden Software Surfer 7 tag-based binary grid with 64-bit double payload"
+
+  - name: "ER Mapper Header"
+    extensions: [".ers"]
+    magic_bytes: "44 61 74 61 73 65 74"    # Dataset
+    magic_offset: 0
+    endian: little
+    header_size: 0
+    data_dtype: float32
+    description: "ER Mapper ASCII header file; companion binary holds raw raster payload"
+
+  - name: "Encom ModelVision Grid"
+    extensions: [".grd"]
+    magic_bytes: "47 52 49 44"    # GRID
+    magic_offset: 168
+    endian: little
+    header_size: 240
+    data_dtype: float32
+    description: "Encom ModelVision 240-byte padded header with 32-bit float payload"
+    fields:
+      - name: grid_marker
+        offset: 168
+        size: 4
+        dtype: ascii
+        description: "GRID identifier string"
+
+  - name: "ESRI ArcInfo Binary Grid"
+    extensions: [".adf"]
+    magic_bytes: "00 00 27 0A FF FF"
+    magic_offset: 0
+    endian: big
+    header_size: 0
+    data_dtype: float32
+    description: "ESRI ArcInfo binary grid component file"
+
+  - name: "TIFF (Big-Endian)"
+    extensions: [".tif", ".tiff"]
+    magic_bytes: "4D 4D 00 2A"    # MM.*
+    magic_offset: 0
+    endian: big
+    header_size: 8
+    data_dtype: uint8
+    description: "Tagged Image File Format, Motorola byte order"
+
+  - name: "TIFF (Little-Endian)"
+    extensions: [".tif", ".tiff"]
+    magic_bytes: "49 49 2A 00"    # II*.
+    magic_offset: 0
+    endian: little
+    header_size: 8
+    data_dtype: uint8
+    description: "Tagged Image File Format, Intel byte order"
+
+  - name: "SEG-Y Rev 0"
+    extensions: [".sgy", ".segy"]
+    magic_bytes: ""
+    magic_offset: 0
+    endian: big
+    header_size: 3600
+    data_dtype: ibm_float32
+    description: "SEG-Y seismic data, IBM hexadecimal float (Rev 0 default)"
+    fields:
+      - name: textual_header
+        offset: 0
+        size: 3200
+        dtype: ascii
+        description: "3200-byte EBCDIC textual header"
+      - name: binary_header
+        offset: 3200
+        size: 400
+        dtype: bytes
+        description: "400-byte binary file header"
+
+  - name: "Geosoft Binary Grid"
+    extensions: [".grd"]
+    magic_bytes: ""
+    magic_offset: 0
+    endian: little
+    header_size: 0
+    data_dtype: float32
+    description: "Geosoft Oasis montaj binary grid (no standard magic number)"
