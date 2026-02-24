@@ -13,6 +13,7 @@ from geodatarev.analyzer import (
     _detect_repeating_pattern,
     _estimate_header_boundary,
     _bit_width_alignment_scores,
+    _detect_endianness,
 )
 
 
@@ -125,3 +126,37 @@ class TestBinaryAnalyzer:
         assert result.file_size > 0
         assert result.entropy > 0
         assert 32 in result.bit_width_scores
+
+    def test_analyze_data_has_endianness(self):
+        data = struct.pack("<10f", *range(10))
+        analyzer = BinaryAnalyzer()
+        result = analyzer.analyze_data(data)
+        assert "little" in result.endianness_scores
+        assert "big" in result.endianness_scores
+
+
+class TestDetectEndianness:
+    def test_little_endian_small_ints(self):
+        # Small 32-bit LE integers: high bytes are zero
+        values = list(range(100))
+        data = struct.pack(f"<{len(values)}I", *values)
+        scores = _detect_endianness(data)
+        assert scores["little"] > scores["big"]
+
+    def test_big_endian_small_ints(self):
+        # Small 32-bit BE integers: low bytes (first) are zero
+        values = list(range(100))
+        data = struct.pack(f">{len(values)}I", *values)
+        scores = _detect_endianness(data)
+        assert scores["big"] > scores["little"]
+
+    def test_short_data(self):
+        scores = _detect_endianness(b"\x01\x02")
+        assert scores["little"] == 0.5
+        assert scores["big"] == 0.5
+
+    def test_returns_both_keys(self):
+        data = b"\x00" * 100
+        scores = _detect_endianness(data)
+        assert "little" in scores
+        assert "big" in scores

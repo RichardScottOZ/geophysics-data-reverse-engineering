@@ -14,6 +14,7 @@ from typing import Any
 
 from geodatarev.analyzer import AnalysisResult, BinaryAnalyzer
 from geodatarev.config import FormatConfig, load_config
+from geodatarev.gdal_compat import GDALCheckResult, try_gdal_open
 from geodatarev.identifier import FileIdentifier
 from geodatarev.parsers import BaseParser, ParseResult
 from geodatarev.parsers.surfer6 import Surfer6Parser
@@ -30,6 +31,7 @@ class FileReport:
     identified_formats: list[str] = field(default_factory=list)
     analysis: AnalysisResult | None = None
     parse_result: ParseResult | None = None
+    gdal_result: GDALCheckResult | None = None
     errors: list[str] = field(default_factory=list)
 
 
@@ -63,6 +65,7 @@ class DirectoryScanner:
         parsers: list[BaseParser] | None = None,
         extensions: set[str] | None = None,
         max_sample: int = 1_048_576,
+        check_gdal: bool = False,
     ):
         self.configs = configs if configs is not None else load_config()
         self.identifier = FileIdentifier(self.configs)
@@ -71,6 +74,7 @@ class DirectoryScanner:
         if parsers:
             self.parsers.extend(parsers)
         self.extensions = extensions
+        self.check_gdal = check_gdal
 
     def scan_file(self, path: str | Path) -> FileReport:
         """Analyse a single file.
@@ -119,6 +123,13 @@ class DirectoryScanner:
                     break
         except Exception as exc:
             report.errors.append(f"Parse error: {exc}")
+
+        # GDAL compatibility check
+        if self.check_gdal:
+            try:
+                report.gdal_result = try_gdal_open(path)
+            except Exception as exc:
+                report.errors.append(f"GDAL check error: {exc}")
 
         return report
 
