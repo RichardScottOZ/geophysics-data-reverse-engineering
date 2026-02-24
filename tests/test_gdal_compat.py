@@ -36,7 +36,7 @@ class TestTryGdalOpen:
     def test_missing_file(self, tmp_path):
         result = try_gdal_open(tmp_path / "nonexistent.tif")
         assert result.can_read is False
-        assert "not found" in result.error.lower() or "File not found" in result.error
+        assert "not found" in result.error.lower()
 
     def test_no_gdal_returns_error(self, tmp_path):
         p = tmp_path / "test.bin"
@@ -123,4 +123,4 @@ class TestGdalCheckCLI:
         out = capsys.readouterr().out
         assert "conda" in out.lower()
         assert "docker" in out.lower()
-        assert "deprecated" in out.lower() or "Deprecated" in out
+        assert "deprecated" in out.lower()

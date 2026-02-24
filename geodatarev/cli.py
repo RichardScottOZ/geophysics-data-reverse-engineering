@@ -106,7 +106,7 @@ def cmd_scan(args) -> int:
     configs = load_config(args.config)
     extensions = {e if e.startswith(".") else f".{e}" for e in (args.extensions or [])} or None
     scanner = DirectoryScanner(configs=configs, extensions=extensions,
-                               check_gdal=getattr(args, "check_gdal", False))
+                               check_gdal=args.check_gdal)
 
     target = Path(args.path)
     if target.is_file():
