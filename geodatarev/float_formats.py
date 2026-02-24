@@ -299,6 +299,10 @@ def decode_value(data: bytes, dtype: str, endian: str = "little") -> int | float
 def decode_array(data: bytes, dtype: str, endian: str = "little") -> list[int | float]:
     """Decode a contiguous array of values from bytes.
 
+    For standard IEEE types uses numpy (if available) or struct bulk
+    unpacking for performance. Falls back to per-element decoding for
+    legacy formats (VAX, IBM).
+
     Parameters
     ----------
     data : bytes
@@ -330,4 +334,30 @@ def decode_array(data: bytes, dtype: str, endian: str = "little") -> list[int | 
         )
 
     n = len(data) // elem_size
+
+    # Fast path: standard IEEE types via numpy or struct bulk unpack
+    if dtype not in ("vax_f", "vax_d", "vax_g", "ibm_float32", "ibm_float64") and endian != "middle":
+        info = _DTYPE_STRUCT[dtype]
+        prefix = _ENDIAN_PREFIX.get(endian, "<")
+        # Try numpy first for large arrays
+        if n > 256:
+            try:
+                import numpy as np
+                np_endian = "<" if endian == "little" else ">"
+                np_dtype_map = {
+                    "uint8": "u1", "int8": "i1",
+                    "uint16": "u2", "int16": "i2",
+                    "uint32": "u4", "int32": "i4",
+                    "uint64": "u8", "int64": "i8",
+                    "float32": "f4", "float64": "f8",
+                }
+                np_dt = np.dtype(f"{np_endian}{np_dtype_map[dtype]}")
+                return np.frombuffer(data, dtype=np_dt).tolist()
+            except ImportError:
+                pass
+        # Fallback: struct bulk unpack
+        fmt_char = info[0]
+        return list(struct.unpack(f"{prefix}{n}{fmt_char}", data))
+
+    # Slow path: per-element decode for legacy formats
     return [decode_value(data[i * elem_size:(i + 1) * elem_size], dtype, endian) for i in range(n)]

@@ -14,12 +14,16 @@ from typing import Any
 
 from geodatarev.analyzer import AnalysisResult, BinaryAnalyzer
 from geodatarev.config import FormatConfig, load_config
+from geodatarev.disambiguate import classify_dat, classify_grd
 from geodatarev.gdal_compat import GDALCheckResult, try_gdal_open
 from geodatarev.identifier import FileIdentifier
 from geodatarev.parsers import BaseParser, ParseResult
 from geodatarev.parsers.surfer6 import Surfer6Parser
 from geodatarev.parsers.surfer7 import Surfer7Parser
 from geodatarev.parsers.ermapper import ERMapperParser
+from geodatarev.parsers.geosoft import GeosoftParser
+from geodatarev.parsers.encom import EncomParser
+from geodatarev.parsers.zmap import ZMapParser
 
 
 @dataclass
@@ -40,6 +44,9 @@ _BUILTIN_PARSERS: list[BaseParser] = [
     Surfer6Parser(),
     Surfer7Parser(),
     ERMapperParser(),
+    EncomParser(),
+    GeosoftParser(),
+    ZMapParser(),
 ]
 
 
@@ -106,6 +113,19 @@ class DirectoryScanner:
             report.identified_formats = [m.name for m in matches]
         except Exception as exc:
             report.errors.append(f"Identification error: {exc}")
+
+        # Disambiguate overloaded extensions when magic-byte ID is inconclusive
+        if not report.identified_formats:
+            try:
+                with open(path, "rb") as fh:
+                    sample = fh.read(min(report.size, 8192))
+                ext = path.suffix.lower()
+                if ext == ".dat":
+                    report.identified_formats = [classify_dat(sample, path)]
+                elif ext == ".grd":
+                    report.identified_formats = [classify_grd(sample, path)]
+            except Exception as exc:
+                report.errors.append(f"Disambiguation error: {exc}")
 
         # Analyse
         try:

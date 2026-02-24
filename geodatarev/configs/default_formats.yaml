@@ -150,6 +150,22 @@ formats:
     magic_bytes: ""
     magic_offset: 0
     endian: little
-    header_size: 0
+    header_size: 512
     data_dtype: float32
-    description: "Geosoft Oasis montaj binary grid (no standard magic number)"
+    description: >
+      Geosoft Oasis montaj binary grid (version 2). 512-byte header with
+      data storage, geographic info, and Z scaling. Payload may be
+      uncompressed or zlib-compressed (ES > 1024). No reliable magic
+      number — use heuristic identification via header field validation.
+
+  - name: "ZMap+ ASCII Grid"
+    extensions: [".zmap", ".dat"]
+    magic_bytes: ""
+    magic_offset: 0
+    endian: little
+    header_size: 0
+    data_dtype: float64
+    description: >
+      Landmark/Zycor ZMap+ ASCII grid. Comment lines start with !,
+      header delimited by @ markers. Identified by structural pattern
+      rather than magic bytes.

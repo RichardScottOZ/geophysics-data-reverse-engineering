@@ -6,6 +6,7 @@ from geodatarev.config import FormatConfig, load_config
 from geodatarev.identifier import FileIdentifier
 from geodatarev.analyzer import BinaryAnalyzer
 from geodatarev.scanner import DirectoryScanner
+from geodatarev.disambiguate import classify_dat, classify_grd
 from geodatarev.gdal_compat import (
     check_gdal_available,
     try_gdal_open,
@@ -19,6 +20,8 @@ __all__ = [
     "FileIdentifier",
     "BinaryAnalyzer",
     "DirectoryScanner",
+    "classify_dat",
+    "classify_grd",
     "check_gdal_available",
     "try_gdal_open",
     "get_old_gdal_strategy",
