@@ -40,8 +40,8 @@ def _parse_ers_header(text: str) -> dict[str, Any]:
             stack.append(child)
             continue
 
-        # Closing a block
-        if re.match(r"^End\s*$", stripped, re.IGNORECASE):
+        # Closing a block: ``End`` or ``BlockName End``
+        if re.match(r"^(\w+\s+)?End\s*$", stripped, re.IGNORECASE):
             if len(stack) > 1:
                 stack.pop()
             continue

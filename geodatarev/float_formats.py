@@ -40,9 +40,16 @@ def reorder_bytes(data: bytes, endian: str) -> bytes:
     Parameters
     ----------
     data : bytes
-        Raw bytes (length 2, 4, or 8).
+        Raw bytes (length 1, 2, 4, or 8).
     endian : str
         One of ``"little"``, ``"big"``, or ``"middle"``.
+
+        The ``"middle"`` (PDP-11) byte order only affects multi-word values.
+        The PDP-11 was a 16-bit architecture whose native word order is
+        little-endian; the idiosyncratic middle-endian ordering only
+        manifests when two or more 16-bit words are combined into 32-bit
+        or 64-bit quantities.  Therefore 8-bit and 16-bit values are
+        returned unchanged (equivalent to little-endian).
 
     Returns
     -------
@@ -54,6 +61,9 @@ def reorder_bytes(data: bytes, endian: str) -> bytes:
     if endian == "big":
         return data[::-1]
     if endian == "middle":
+        if len(data) <= 2:
+            # PDP-11 native 16-bit words are little-endian
+            return data
         if len(data) == 4:
             return swap_middle_endian_32(data)
         if len(data) == 8:
