@@ -28,6 +28,7 @@ class AnalysisResult:
     detected_patterns: list[dict] = field(default_factory=list)
     header_boundary: int | None = None
     bit_width_scores: dict[int, float] = field(default_factory=dict)
+    endianness_scores: dict[str, float] = field(default_factory=dict)
 
 
 def _shannon_entropy(data: bytes) -> float:
@@ -202,6 +203,62 @@ def _bit_width_alignment_scores(data: bytes) -> dict[int, float]:
     return scores
 
 
+def _detect_endianness(data: bytes) -> dict[str, float]:
+    """Heuristically score byte-order likelihood for 16/32-bit words.
+
+    Examines null-byte positions within 16-bit and 32-bit word
+    boundaries.  In little-endian data containing small integer or
+    float values the *high* bytes are more often zero; in big-endian
+    data the *low* bytes are more often zero.
+
+    Parameters
+    ----------
+    data : bytes
+        Binary data to analyse (at least a few hundred bytes).
+
+    Returns
+    -------
+    dict[str, float]
+        Scores for ``"little"`` and ``"big"`` (0.0-1.0, higher is
+        more likely).
+    """
+    if len(data) < 4:
+        return {"little": 0.5, "big": 0.5}
+
+    sample = data[:min(len(data), 4096)]
+    # Trim to 4-byte alignment
+    usable = len(sample) - (len(sample) % 4)
+    if usable < 4:
+        return {"little": 0.5, "big": 0.5}
+    sample = sample[:usable]
+
+    le_score = 0
+    be_score = 0
+    n_words = usable // 4
+
+    for i in range(0, usable, 4):
+        word = sample[i:i + 4]
+        # Little-endian small values: high bytes (word[2], word[3]) tend to be zero
+        if word[3] == 0:
+            le_score += 1
+        if word[2] == 0:
+            le_score += 0.5
+        # Big-endian small values: low bytes (word[2], word[3]) tend to be zero
+        if word[0] == 0:
+            be_score += 1
+        if word[1] == 0:
+            be_score += 0.5
+
+    total = le_score + be_score
+    if total == 0:
+        return {"little": 0.5, "big": 0.5}
+
+    return {
+        "little": round(le_score / total, 3),
+        "big": round(be_score / total, 3),
+    }
+
+
 class BinaryAnalyzer:
     """Analyse binary files for reverse engineering.
 
@@ -246,6 +303,7 @@ class BinaryAnalyzer:
             detected_patterns=_detect_repeating_pattern(sample),
             header_boundary=_estimate_header_boundary(sample),
             bit_width_scores=_bit_width_alignment_scores(data),
+            endianness_scores=_detect_endianness(sample),
         )
 
     def analyze_file(self, path: str | Path) -> AnalysisResult:

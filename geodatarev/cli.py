@@ -30,6 +30,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Path to a YAML format config file")
     scan_p.add_argument("--json", dest="output_json", action="store_true",
                         help="Output results as JSON")
+    scan_p.add_argument("--gdal", dest="check_gdal", action="store_true",
+                        help="Also check whether GDAL can read each file")
 
     # --- identify ---
     id_p = sub.add_parser("identify", help="Identify a single binary file")
@@ -40,6 +42,15 @@ def _build_parser() -> argparse.ArgumentParser:
     an_p = sub.add_parser("analyze", help="Run binary analysis on a file")
     an_p.add_argument("file", help="File to analyse")
     an_p.add_argument("--json", dest="output_json", action="store_true")
+
+    # --- gdal-check ---
+    gc_p = sub.add_parser("gdal-check", help="Check if GDAL can read a file")
+    gc_p.add_argument("file", help="File to check")
+    gc_p.add_argument("--json", dest="output_json", action="store_true")
+
+    # --- gdal-strategy ---
+    sub.add_parser("gdal-strategy",
+                   help="Show strategies for obtaining old GDAL builds")
 
     return parser
 
@@ -63,6 +74,7 @@ def _report_to_dict(report) -> dict:
             "printable_strings": a.printable_strings[:20],
             "header_boundary": a.header_boundary,
             "bit_width_scores": a.bit_width_scores,
+            "endianness_scores": a.endianness_scores,
             "detected_patterns": a.detected_patterns[:10],
         }
     if report.parse_result:
@@ -74,6 +86,18 @@ def _report_to_dict(report) -> dict:
             "data_points": len(p.data),
             "errors": p.errors,
         }
+    if report.gdal_result:
+        g = report.gdal_result
+        d["gdal"] = {
+            "can_read": g.can_read,
+            "driver_short_name": g.driver_short_name,
+            "driver_long_name": g.driver_long_name,
+            "gdal_version": g.gdal_version,
+            "raster_size": list(g.raster_size) if g.raster_size else None,
+            "band_count": g.band_count,
+            "band_dtypes": g.band_dtypes,
+            "error": g.error,
+        }
     return d
 
 
@@ -81,7 +105,8 @@ def cmd_scan(args) -> int:
     """Execute the ``scan`` subcommand."""
     configs = load_config(args.config)
     extensions = {e if e.startswith(".") else f".{e}" for e in (args.extensions or [])} or None
-    scanner = DirectoryScanner(configs=configs, extensions=extensions)
+    scanner = DirectoryScanner(configs=configs, extensions=extensions,
+                               check_gdal=getattr(args, "check_gdal", False))
 
     target = Path(args.path)
     if target.is_file():
@@ -138,6 +163,7 @@ def cmd_analyze(args) -> int:
             "high_byte_ratio": result.high_byte_ratio,
             "header_boundary": result.header_boundary,
             "bit_width_scores": result.bit_width_scores,
+            "endianness_scores": result.endianness_scores,
             "detected_patterns": result.detected_patterns[:10],
             "printable_strings": result.printable_strings[:20],
         }
@@ -153,6 +179,9 @@ def cmd_analyze(args) -> int:
         print("Bit-width scores:")
         for bits, score in sorted(result.bit_width_scores.items()):
             print(f"  {bits:>2}-bit: {score:.3f}")
+        print("Endianness scores:")
+        for endian, score in sorted(result.endianness_scores.items()):
+            print(f"  {endian}: {score:.3f}")
         if result.detected_patterns:
             print("Detected patterns:")
             for p in result.detected_patterns[:5]:
@@ -176,6 +205,14 @@ def _print_report(report) -> None:
         print(f"Entropy: {a.entropy:.4f} | ASCII: {a.ascii_ratio:.2%} | "
               f"Null: {a.null_ratio:.2%}")
         print(f"Bit-width scores: {a.bit_width_scores}")
+        if a.endianness_scores:
+            print(f"Endianness scores: {a.endianness_scores}")
+    if report.gdal_result:
+        g = report.gdal_result
+        if g.can_read:
+            print(f"GDAL: readable ({g.driver_short_name} - {g.driver_long_name})")
+        elif g.error:
+            print(f"GDAL: {g.error}")
     if report.parse_result:
         p = report.parse_result
         print(f"Parsed as: {p.format_name}")
@@ -187,6 +224,75 @@ def _print_report(report) -> None:
     if report.errors:
         for e in report.errors:
             print(f"  ERROR: {e}")
+
+
+def cmd_gdal_check(args) -> int:
+    """Execute the ``gdal-check`` subcommand."""
+    from geodatarev.gdal_compat import try_gdal_open, check_gdal_available
+
+    status = check_gdal_available()
+    if not status["available"]:
+        print(f"GDAL not available: {status['error']}")
+        return 1
+
+    result = try_gdal_open(args.file)
+
+    if args.output_json:
+        d = {
+            "gdal_version": result.gdal_version,
+            "can_read": result.can_read,
+            "driver_short_name": result.driver_short_name,
+            "driver_long_name": result.driver_long_name,
+            "raster_size": list(result.raster_size) if result.raster_size else None,
+            "band_count": result.band_count,
+            "band_dtypes": result.band_dtypes,
+            "projection": result.projection,
+            "error": result.error,
+        }
+        print(json.dumps(d, indent=2))
+    else:
+        if result.can_read:
+            print(f"GDAL can read: YES")
+            print(f"  Driver: {result.driver_short_name} ({result.driver_long_name})")
+            print(f"  GDAL version: {result.gdal_version}")
+            if result.raster_size:
+                print(f"  Raster size: {result.raster_size[0]} x {result.raster_size[1]}")
+            if result.band_count:
+                print(f"  Bands: {result.band_count} ({', '.join(result.band_dtypes)})")
+        else:
+            print(f"GDAL can read: NO")
+            if result.error:
+                print(f"  Reason: {result.error}")
+    return 0
+
+
+def cmd_gdal_strategy(args) -> int:
+    """Execute the ``gdal-strategy`` subcommand."""
+    from geodatarev.gdal_compat import get_old_gdal_strategy
+
+    strategy = get_old_gdal_strategy()
+
+    print("Strategies for obtaining old GDAL builds")
+    print("=" * 50)
+    for approach in strategy["approaches"]:
+        print(f"\n[{approach['method']}]")
+        print(f"  {approach['description']}")
+        print("  Commands:")
+        for cmd in approach["commands"]:
+            print(f"    $ {cmd}")
+
+    deprecated = strategy["deprecated_formats"]
+    if deprecated:
+        print(f"\nDeprecated / removed format drivers")
+        print("-" * 40)
+        for key, info in deprecated.items():
+            print(f"  {key}: {info['description']}")
+            print(f"    Driver: {info['driver']}, last in GDAL {info['last_supported']}")
+            if info["notes"]:
+                print(f"    Note: {info['notes']}")
+
+    print(f"\n{strategy['notes']}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -202,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         "scan": cmd_scan,
         "identify": cmd_identify,
         "analyze": cmd_analyze,
+        "gdal-check": cmd_gdal_check,
+        "gdal-strategy": cmd_gdal_strategy,
     }
     handler = dispatch.get(args.command)
     if handler is None:
