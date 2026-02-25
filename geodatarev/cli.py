@@ -103,19 +103,26 @@ def _report_to_dict(report) -> dict:
 
 def cmd_scan(args) -> int:
     """Execute the ``scan`` subcommand."""
+    from geodatarev.cloud_storage import is_cloud_uri
+
     configs = load_config(args.config)
     extensions = {e if e.startswith(".") else f".{e}" for e in (args.extensions or [])} or None
     scanner = DirectoryScanner(configs=configs, extensions=extensions,
                                check_gdal=args.check_gdal)
 
-    target = Path(args.path)
-    if target.is_file():
-        reports = [scanner.scan_file(target)]
-    elif target.is_dir():
-        reports = scanner.scan_directory(target, recursive=args.recursive)
+    target_str = args.path
+
+    if is_cloud_uri(target_str):
+        reports = scanner.scan_cloud(target_str, recursive=args.recursive)
     else:
-        print(f"Error: {args.path} is not a valid file or directory", file=sys.stderr)
-        return 1
+        target = Path(target_str)
+        if target.is_file():
+            reports = [scanner.scan_file(target)]
+        elif target.is_dir():
+            reports = scanner.scan_directory(target, recursive=args.recursive)
+        else:
+            print(f"Error: {args.path} is not a valid file or directory", file=sys.stderr)
+            return 1
 
     if args.output_json:
         print(json.dumps([_report_to_dict(r) for r in reports], indent=2))
